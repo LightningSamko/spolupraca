@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Generátor jednorazových kódov (mená + Discord webhook)</title>
+  <style>
+    :root {
+      font-family: Inter, system-ui, Segoe UI, Roboto, 'Helvetica Neue', Arial;
+      padding: 0;
+      margin: 0;
+    }
+    body {
+      padding: 18px;
+      background: #0f172a;
+      color: #f8fafc;
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 18px auto;
+      background: #1e293b;
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+      padding: 20px;
+    }
+    h1 {
+      font-size: 22px;
+      margin: 0 0 8px;
+      color: #f1f5f9;
+    }
+    p.lead {
+      margin: 0 0 18px;
+      color: #cbd5e1;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .col {
+      flex: 1 1 220px;
+      min-width: 200px;
+      background: #273549;
+      padding: 14px;
+      border-radius: 10px;
+      box-sizing: border-box;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 6px;
+      color: #e2e8f0;
+    }
+    input[type=text], input[type=number], textarea {
+      width: 100%;
+      padding: 9px 10px;
+      border-radius: 8px;
+      border: 1px solid #475569;
+      background: #1e293b;
+      color: #f8fafc;
+      font-size: 15px;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    input[type=text]:focus, input[type=number]:focus, textarea:focus {
+      border-color: #0ea5e9;
+      background: #334155;
+    }
+    textarea { min-height: 140px; resize: vertical; font-size: 14px; }
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 14px;
+    }
+    button {
+      background: #0ea5e9;
+      color: #fff;
+      border: 0;
+      padding: 10px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    button:hover { background: #0284c7; }
+    button.secondary { background: #475569; }
+    .results {
+      margin-top: 18px;
+      border-top: 1px solid #334155;
+      padding-top: 18px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    td, th {
+      padding: 10px 8px;
+      text-align: left;
+      border-bottom: 1px solid #334155;
+    }
+    th {
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+    .muted { color: #94a3b8; font-size: 13px; }
+    .warn { color: #facc15; font-weight: 600; }
+    .error { color: #f87171; font-weight: 600; }
+    .small { font-size: 13px; color: #94a3b8; }
+    .copy {
+      background: #1e40af;
+      border-radius: 6px;
+      padding: 6px 10px;
+      cursor: pointer;
+      color: #f8fafc;
+      font-size: 13px;
+    }
+    .copy:hover { background: #1d4ed8; }
+    footer {
+      margin-top: 14px;
+      font-size: 13px;
+      color: #94a3b8;
+      text-align: center;
+    }
+    .inline { display:inline-block; vertical-align: middle; }
+    .meta { margin-top:8px; color:#94a3b8; font-size:13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Generátor jednorazových 5-místnych kódov</h1>
+    <p class="lead">Vlož do zoznamu mená (CTRL+V zo zoznamu s menami, každý riadok jedno meno), importuj, potom zadaj meno do políčka a vygeneruj unikátny 5-místny kód. Kód sa zobrazí iba ti. Môžeš tiež nastaviť Discord webhook na automatické odoslanie správy.</p>
+
+    <div class="row">
+      <div class="col" style="flex:1 1 420px;">
+        <label for="namesArea">Zoznam mien (každé meno na novom riadku)</label>
+        <textarea id="namesArea" placeholder="Adam Hruska&#10;Roman Tvrdy&#10;Imrich Divny"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button id="importNames">Importovať mená</button>
+          <button id="clearNames" class="secondary">Vyčisti zoznam</button>
+          <div style="margin-left:auto" class="small" id="namesCount">0 mien</div>
+        </div>
+        <div class="meta">Tip: môžeš priamo upraviť premennú <code>DEFAULT_NAMES</code> v zdrojovom kóde ak chceš mať zoznam pevne.</div>
+      </div>
+
+      <div class="col" style="flex:1 1 240px;">
+        <label for="webhook">Discord webhook URL (voliteľné)</label>
+        <input id="webhook" type="text" placeholder="https://discord.com/api/webhooks/1424694766754336820/tKhv59jNqZfuYbV60xZkH6Gnd837IUPJH6xXFeIUGxGXut-DLOpN_LZpdURBdHL0wyHg" />
+        <div class="meta">Webhook sa uloží lokálne do prehliadača. Ak odoslanie zlyhá (CORS), uvidíš alternatívu s curl príkazom.</div>
+      </div>
+
+      <div class="col" style="flex:1 1 300px;">
+        <label for="nameInput">Zadaj meno pre generovanie kódu</label>
+        <input id="nameInput" type="text" placeholder="Zadaj meno (presne ako v zozname)" />
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button id="gen">Vygenerovať</button>
+          <button id="showList" class="secondary">Zobraziť zoznam</button>
+          <button id="resetAll" class="secondary">Resetovať session</button>
+        </div>
+        <div id="lastCode" class="meta"></div>
+      </div>
+    </div>
+
+    <div class="results" id="results"></div>
+
+    <footer>
+      GitHub Pages: ulož tento súbor ako <code>index.html</code> do repozitára a aktivuj Pages v nastaveniach.
+    </footer>
+  </div>
+
+  <script>
+    // -----------------------
+    // KONFIGURÁCIA (upraviť priamo v súbore ak chceš)
+    // -----------------------
+    // Predvolené mená vlož do poľa nižšie (každý item je string).
+    // Môžeš ich doplniť alebo vymazať.
+    const DEFAULT_NAMES = [
+      "Adam Hruska",
+      "Roman Tvrdy",
+      "Imrich Divny"
+    ];
+    // -----------------------
+
+    // Util funkcie
+    const el = id => document.getElementById(id);
+
+    function normalizeName(s){
+      if(!s) return '';
+      // odstráni diakritiku a medzery na koncoch, zmení na malé písmená — uľahčí vyhľadávanie
+      return s.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    }
+
+    function splitLines(text){
+      return text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    }
+
+    // formátovanie
+    function fmt(n){ return String(n).padStart(5, '0'); }
+
+    // Local storage keys
+    const LS_NAMES = 'gencodes_names_v1';
+    const LS_WEBHOOK = 'gencodes_webhook_v1';
+    const LS_USED = 'gencodes_used_v1';
+
+    // In-memory sets
+    let namesSet = new Map(); // key: normalized name -> original name
+    let usedCodes = new Set();
+
+    // Load defaults or local storage
+    function loadInitial(){
+      // Load names
+      let raw = localStorage.getItem(LS_NAMES);
+      if(raw){
+        try{
+          const arr = JSON.parse(raw);
+          if(Array.isArray(arr) && arr.length) {
+            arr.forEach(n => namesSet.set(normalizeName(n), n));
+          }
+        }catch(e){
+          // fallback to DEFAULT_NAMES
+        }
+      }
+      // if still empty, use DEFAULT_NAMES
+      if(namesSet.size === 0){
+        DEFAULT_NAMES.forEach(n => namesSet.set(normalizeName(n), n));
+      }
+
+      // Load webhook
+      const webhook = localStorage.getItem(LS_WEBHOOK) || '';
+      el('webhook').value = webhook;
+
+      // Load used codes
+      try{
+        const usedRaw = JSON.parse(localStorage.getItem(LS_USED) || '[]');
+        if(Array.isArray(usedRaw)) usedRaw.forEach(c => usedCodes.add(String(c)));
+      }catch(e){ /* ignore */ }
+
+      updateNamesCount();
+    }
+
+    function saveNamesToLS(){
+      const arr = Array.from(namesSet.values());
+      localStorage.setItem(LS_NAMES, JSON.stringify(arr));
+    }
+    function saveUsedToLS(){
+      localStorage.setItem(LS_USED, JSON.stringify(Array.from(usedCodes)));
+    }
+    function saveWebhookToLS(){
+      localStorage.setItem(LS_WEBHOOK, el('webhook').value.trim());
+    }
+
+    function updateNamesCount(){
+      el('namesCount').textContent = `${namesSet.size} ${namesSet.size === 1 ? 'meno' : 'mien'}`;
+    }
+
+    // Importovať mená z textarea
+    el('importNames').addEventListener('click', ()=>{
+      const text = el('namesArea').value || '';
+      const lines = splitLines(text);
+      let added = 0;
+      lines.forEach(l=>{
+        const key = normalizeName(l);
+        if(key && !namesSet.has(key)){
+          namesSet.set(key, l);
+          added++;
+        }
+      });
+      if(added > 0){
+        saveNamesToLS();
+      }
+      updateNamesCount();
+      el('namesArea').value = '';
+      showMessage(`Importované ${added} ${added === 1 ? 'meno' : 'mien'}.`);
+    });
+
+    // Vyčisti zoznam
+    el('clearNames').addEventListener('click', ()=>{
+      if(!confirm('Naozaj vymazať celý zoznam mien?')) return;
+      namesSet.clear();
+      saveNamesToLS();
+      updateNamesCount();
+      showMessage('Zoznam mien vymazaný.');
+    });
+
+    // Zobraziť zoznam menom
+    el('showList').addEventListener('click', ()=>{
+      if(namesSet.size === 0){ showMessage('Zoznam je prázdny.'); return; }
+      const arr = Array.from(namesSet.values()).sort((a,b)=>a.localeCompare(b,'sk'));
+      const html = `<div style="max-height:220px;overflow:auto;border:1px solid #334155;padding:8px;border-radius:8px;background:#0f172a">
+        <strong>Zoznam mien (${arr.length})</strong>
+        <ul style="margin:8px 0 0 18px;">${arr.map(n=>`<li>${escapeHtml(n)}</li>`).join('')}</ul>
+      </div>`;
+      el('results').innerHTML = html;
+    });
+
+    // Generate unique 5-digit numeric code
+    function genUniqueCode(){
+      // attempt until unique -- space of 00000-99999 = 100k codes
+      // if usedCodes grows near limit, it may loop a while; that's acceptable for small sets
+      for(let i=0;i<1000;i++){
+        const num = Math.floor(Math.random()*100000); // 0..99999
+        const code = fmt(num);
+        if(!usedCodes.has(code)){
+          usedCodes.add(code);
+          saveUsedToLS();
+          return code;
+        }
+      }
+      throw new Error('Nepodarilo sa vygenerovať unikátny kód (príliš veľa použitých).');
+    }
+
+    // Generate handler
+    el('gen').addEventListener('click', async ()=>{
+      const rawName = el('nameInput').value || '';
+      if(!rawName.trim()){ showMessage('Zadaj meno.', 'error'); return; }
+      const key = normalizeName(rawName);
+      if(!namesSet.has(key)){
+        showMessage('Meno nie je v zozname. Skontroluj pravopis alebo importuj mená.', 'error');
+        return;
+      }
+      // generate new code
+      let code;
+      try{
+        code = genUniqueCode();
+      }catch(e){
+        showMessage(e.message, 'error');
+        return;
+      }
+
+      // Show only to this user
+      el('lastCode').textContent = `${namesSet.get(key)} dostal kód: ${code}`;
+      showMessage(`Vygenerovaný kód: ${code}`, 'muted');
+
+      // Attempt to send webhook if present
+      const webhookUrl = el('webhook').value.trim();
+      saveWebhookToLS();
+      if(webhookUrl){
+        // Prepare payload
+        const payload = { content: `${namesSet.get(key)} dostal kod: ${code}` };
+        try {
+          const resp = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if(!resp.ok){
+            // show server response text if available
+            const text = await resp.text().catch(()=>resp.statusText || 'Chyba');
+            showMessage(`Webhook vrátil chybu: ${resp.status} ${text}`, 'error');
+            showWebhookFallback(webhookUrl, payload);
+          } else {
+            showMessage('Správa odoslaná na webhook.', 'muted');
+          }
+        } catch(err){
+          // pravdepodobne CORS alebo sieťová chyba
+          showMessage('Nepodarilo sa odoslať webhook (možný CORS alebo sieťová chyba). Pozri nižšie pre manuálnu alternatívu.', 'error');
+          showWebhookFallback(webhookUrl, payload);
+          console.error('Webhook error:', err);
+        }
+      } else {
+        showMessage('Webhook URL nie je nastavený. Kód nebol odoslaný na Discord.', 'muted');
+      }
+    });
+
+    // Resetovať session (vymaže použité kódy)
+    el('resetAll').addEventListener('click', ()=>{
+      if(!confirm('Resetovať používané kódy v tejto session? (vymaže sa história použitých kódov v localStorage)')) return;
+      usedCodes.clear();
+      saveUsedToLS();
+      el('lastCode').textContent = '';
+      showMessage('Session resetnutá (použité kódy vymazané).');
+    });
+
+    // webhook input change -> save
+    el('webhook').addEventListener('blur', saveWebhookToLS);
+
+    // small helper to show messages
+    function showMessage(msg, type='muted'){
+      el('results').innerHTML = `<div class="${escapeHtml(type)}">${escapeHtml(msg)}</div>`;
+    }
+
+    // show fallback curl / manual payload for webhook if fetch fails or CORS
+    function showWebhookFallback(url, payload){
+      const curl = `curl -H "Content-Type: application/json" -d '${JSON.stringify(payload)}' "${url}"`;
+      const html = `
+        <div style="margin-top:10px;padding:10px;border-radius:8px;background:#0b1220;border:1px solid #334155">
+          <div class="warn">Webhook nedostupný z prehliadača (CORS). Manuálna alternatíva:</div>
+          <div style="margin-top:8px;color:#cbd5e1;font-size:13px;">Skopíruj a spusti na serveri alebo v termináli (curl):</div>
+          <pre style="white-space:pre-wrap;margin-top:8px;padding:8px;border-radius:6px;background:#071427;border:1px solid #213248;color:#e2e8f0">${escapeHtml(curl)}</pre>
+          <div style="margin-top:8px;color:#9fb0c8;font-size:13px;">Alebo použite serverless funkciu/proxy, ktorá odošle POST na Discord webhook.</div>
+        </div>
+      `;
+      el('results').insertAdjacentHTML('beforeend', html);
+    }
+
+    // Escape HTML small util
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]; });
+    }
+
+    // initial load
+    loadInitial();
+
+    // expose small helper for debugging in console (optional)
+    window.GEN = {
+      namesCount: ()=>namesSet.size,
+      listNames: ()=>Array.from(namesSet.values()).slice(0,500),
+      usedCodes,
+      resetUsed: ()=>{
+        usedCodes.clear(); saveUsedToLS(); showMessage('Použité kódy vymazané.');
+      }
+    };
+  </script>
+</body>
+</html>
